@@ -33,7 +33,7 @@ public class JwtService {
 
     public JwtService(
             @Value("${jwt.secret}")              String secret,
-            @Value("${jwt.expiration-ms:900000}")        long   accessExpirationMs,
+            @Value("${jwt.expiration-ms:43200000}")        long   accessExpirationMs,
             @Value("${jwt.refresh-expiration-ms:604800000}") long refreshExpirationMs,
             @Value("${jwt.issuer:user-service}")  String issuer,
             @Value("${jwt.audience:api-gateway}") String audience) {

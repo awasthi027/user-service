@@ -1,6 +1,6 @@
 # user-service
 
-Spring Boot microservice that handles user registration, login (JWT Bearer tokens), and refresh-token rotation.  
+Spring Boot microservice that handles user registration, login (JWT Bearer tokens), refresh-token rotation, logout, and account deletion.  
 Designed for deployment on **Railway** with a managed **PostgreSQL** database.
 
 ---
@@ -11,6 +11,8 @@ Designed for deployment on **Railway** with a managed **PostgreSQL** database.
 POST /api/users/register   → save user to PostgreSQL (BCrypt password)
 POST /api/users/login      → validate credentials → issue access + refresh JWT
 POST /api/users/refresh    → validate refresh token → rotate & issue new pair
+POST /api/users/logout     → revoke all refresh tokens for user (NEW)
+DELETE /api/users/{id}     → delete user account & all session data (NEW)
 GET  /api/users/{id}       → fetch user by ID
 GET  /api/users            → list all users
 GET  /api/users/health     → health check
@@ -86,7 +88,7 @@ Tests use an **H2 in-memory database** — no PostgreSQL required.
 |------------|----------|
 | `JwtServiceTest` | token generation, claims, tamper detection, expiry (10 tests) |
 | `UserServiceTest` | register, login, refresh, rotation, revocation (14 tests) |
-| `UserControllerTest` | all HTTP endpoints, validation errors, auth flows (15 tests) |
+| `UserControllerTest` | all HTTP endpoints, validation errors, auth flows, logout, delete (24 tests) |
 
 ---
 
@@ -133,6 +135,46 @@ curl -X POST http://localhost:8080/api/users/refresh \
   -H "Content-Type: application/json" \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
+
+### Logout (Revoke All Sessions)
+```bash
+curl -X POST http://localhost:8080/api/users/logout \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+Response:
+```json
+{
+  "status": 200,
+  "message": "Logged out successfully",
+  "data": null
+}
+```
+
+### Get User by ID
+```bash
+curl -X GET http://localhost:8080/api/users/{userId} \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+### Delete User Account (Permanent)
+```bash
+curl -X DELETE http://localhost:8080/api/users/{userId} \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+Response:
+```json
+{
+  "status": 200,
+  "message": "User deleted successfully",
+  "data": null
+}
+```
+
+> **⚠️ Warning:** User deletion is **PERMANENT AND IRREVERSIBLE**. All user data and session tokens will be deleted.
+> Users can only delete their own accounts (authorization check enforced).
+
 
 ---
 

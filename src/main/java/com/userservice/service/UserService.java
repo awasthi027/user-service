@@ -121,6 +121,35 @@ public class UserService {
                 jwtService.getAccessExpirationMs() / 1000, user));
     }
 
+     // ── Logout ────────────────────────────────────────────────────────────
+
+    /**
+     * Revokes all active refresh tokens for the given user (logout).
+     */
+    @Transactional
+    public void logout(User user) {
+        refreshTokenRepository.revokeAllByUser(user);
+        System.out.println("[UserService] Logged out → " + user.getEmail());
+    }
+
+    // ── Delete User ────────────────────────────────────────────────────────
+
+    /**
+     * Deletes a user and all associated refresh tokens (complete session cleanup).
+     */
+    @Transactional
+    public void deleteUser(String userId) {
+        Optional<User> optional = userRepository.findById(userId);
+        if (optional.isPresent()) {
+            User user = optional.get();
+            // Delete all refresh tokens for this user
+            refreshTokenRepository.deleteAllByUser(user);
+            // Delete the user
+            userRepository.delete(user);
+            System.out.println("[UserService] User deleted → " + user.getEmail());
+        }
+    }
+
     // ── Query helpers ─────────────────────────────────────────────────────
 
     public Optional<User> findByEmail(String email)  { return userRepository.findByEmail(email); }

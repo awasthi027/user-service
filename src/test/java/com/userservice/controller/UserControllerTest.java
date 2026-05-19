@@ -6,6 +6,7 @@ import com.userservice.dto.LoginRequest;
 import com.userservice.dto.RefreshTokenRequest;
 import com.userservice.dto.RegisterRequest;
 import com.userservice.model.User;
+import com.userservice.service.JwtService;
 import com.userservice.service.UserService;
 import com.userservice.service.UserService.TokenPair;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -39,6 +41,7 @@ class UserControllerTest {
     @Autowired MockMvc       mockMvc;
     @Autowired ObjectMapper  objectMapper;
     @MockBean  UserService   userService;
+    @MockBean  JwtService    jwtService;
 
     private User      sampleUser;
     private TokenPair sampleTokenPair;
@@ -280,6 +283,120 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.data[0].email").value("john@example.com"));
+    }
+
+    // ── Logout ────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("POST /logout – valid token → 200")
+    void logout_validToken_returns200() throws Exception {
+        when(jwtService.isTokenValid("mock-access-token")).thenReturn(true);
+        when(jwtService.extractUserId("mock-access-token")).thenReturn(sampleUser.getUserId());
+        when(userService.findById(sampleUser.getUserId())).thenReturn(Optional.of(sampleUser));
+        doNothing().when(userService).logout(sampleUser);
+
+        mockMvc.perform(post("/api/users/logout")
+                .header("Authorization", "Bearer mock-access-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("Logged out successfully"));
+    }
+
+    @Test
+    @DisplayName("POST /logout – missing authorization header → 401")
+    void logout_missingAuthHeader_returns401() throws Exception {
+        mockMvc.perform(post("/api/users/logout"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Missing or invalid Authorization header."));
+    }
+
+    @Test
+    @DisplayName("POST /logout – invalid token → 401")
+    void logout_invalidToken_returns401() throws Exception {
+        when(jwtService.isTokenValid("invalid-token")).thenReturn(false);
+
+        mockMvc.perform(post("/api/users/logout")
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Invalid or expired token."));
+    }
+
+    @Test
+    @DisplayName("POST /logout – user not found → 404")
+    void logout_userNotFound_returns404() throws Exception {
+        when(jwtService.isTokenValid("mock-access-token")).thenReturn(true);
+        when(jwtService.extractUserId("mock-access-token")).thenReturn("unknown-user-id");
+        when(userService.findById("unknown-user-id")).thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/api/users/logout")
+                .header("Authorization", "Bearer mock-access-token"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    // ── Delete User ───────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("DELETE /{id} – valid token, own account → 200")
+    void deleteUser_ownAccount_returns200() throws Exception {
+        when(jwtService.isTokenValid("mock-access-token")).thenReturn(true);
+        when(jwtService.extractUserId("mock-access-token")).thenReturn(sampleUser.getUserId());
+        when(userService.findById(sampleUser.getUserId())).thenReturn(Optional.of(sampleUser));
+        doNothing().when(userService).deleteUser(sampleUser.getUserId());
+
+        mockMvc.perform(delete("/api/users/{id}", sampleUser.getUserId())
+                .header("Authorization", "Bearer mock-access-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("User deleted successfully"));
+    }
+
+    @Test
+    @DisplayName("DELETE /{id} – missing authorization header → 401")
+    void deleteUser_missingAuthHeader_returns401() throws Exception {
+        mockMvc.perform(delete("/api/users/{id}", sampleUser.getUserId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    @DisplayName("DELETE /{id} – invalid token → 401")
+    void deleteUser_invalidToken_returns401() throws Exception {
+        when(jwtService.isTokenValid("invalid-token")).thenReturn(false);
+
+        mockMvc.perform(delete("/api/users/{id}", sampleUser.getUserId())
+                .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    @DisplayName("DELETE /{id} – trying to delete another user → 403")
+    void deleteUser_anotherAccount_returns403() throws Exception {
+        String otherUserId = UUID.randomUUID().toString();
+        when(jwtService.isTokenValid("mock-access-token")).thenReturn(true);
+        when(jwtService.extractUserId("mock-access-token")).thenReturn(sampleUser.getUserId());
+
+        mockMvc.perform(delete("/api/users/{id}", otherUserId)
+                .header("Authorization", "Bearer mock-access-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value("You can only delete your own account."));
+    }
+
+    @Test
+    @DisplayName("DELETE /{id} – user not found → 404")
+    void deleteUser_userNotFound_returns404() throws Exception {
+        when(jwtService.isTokenValid("mock-access-token")).thenReturn(true);
+        when(jwtService.extractUserId("mock-access-token")).thenReturn(sampleUser.getUserId());
+        when(userService.findById(sampleUser.getUserId())).thenReturn(Optional.empty());
+
+        mockMvc.perform(delete("/api/users/{id}", sampleUser.getUserId())
+                .header("Authorization", "Bearer mock-access-token"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
     }
 }
 
