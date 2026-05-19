@@ -138,7 +138,17 @@ curl -X POST http://localhost:8080/api/users/refresh \
 
 ## Railway Deployment
 
-1. Push to GitHub and connect the repo in Railway.  
-2. Add a **PostgreSQL** plugin — Railway injects `PG*` vars automatically.  
-3. Add `JWT_SECRET` as an environment variable (generate: `openssl rand -base64 32`).  
-4. Railway auto-detects Maven and runs `mvn package && java -jar target/*.jar`.
+This repo includes a production `Dockerfile` and `railway.toml` so Railway can build and run reliably.
+
+1. Push this repo to GitHub and connect it to a Railway service.
+2. In Railway, set these service variables:
+   - `JWT_SECRET` (generate with `openssl rand -base64 32`)
+   - `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` (from your Neon project)
+3. Trigger a deploy (Railway usually deploys automatically after repo connect, otherwise click **Deploy Latest Commit**).
+4. Verify after deploy:
+   - `GET /api/users/health` returns `200`
+   - Logs show Flyway migrations ran successfully
+
+### Neon (external PostgreSQL)
+
+If DB is hosted outside Railway (Neon/Supabase), Railway will not auto-inject `PG*` variables. Add them manually in the service Variables tab.
